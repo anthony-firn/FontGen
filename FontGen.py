@@ -8,7 +8,11 @@ def font_gen(initstr, path, font, size, color) :
     # First do a quick sanity check on the font
     if font == 'Comic Sans MS' :
         initstr = "Comic Sans? Are you sure?"
-    for char in initstr:
+    
+    # deduplicate characters
+    dedupstr = "".join(set(initstr))
+    
+    for char in dedupstr:
         # Make a new image. Size 10x10 for now -- we'll resize later.
         img = gimp.Image(1, 1, RGB)
 
@@ -19,6 +23,7 @@ def font_gen(initstr, path, font, size, color) :
         gimp.set_foreground(color)
 
         # Create a new text layer (-1 for the layer means create a new layer)
+        char = char.decode('unicode_escape').encode('utf-8')
         layer = pdb.gimp_text_fontname(img, None, 0, 0, char, 10,
                                    True, size, PIXELS, font)
 
@@ -43,6 +48,21 @@ def font_gen(initstr, path, font, size, color) :
         # Save resulting image
         new_image = pdb.gimp_image_duplicate(img)
         layer = pdb.gimp_image_merge_visible_layers(new_image, CLIP_TO_IMAGE)
+        switcher = {
+            '/':'slash',
+            '\\':'backslash',
+            '?':'question_mark',
+            '%':'percent',
+            '*':'asterisk',
+            ':':'colon',
+            '|':'pipe',
+            '"':'quote',
+            '<':'less_than',
+            '>':'greater_than',
+            '.':'period',
+            ' ':'space'
+        }
+        char = switcher.get(char,char)
         pdb.gimp_file_save(new_image, layer, path + "/" + char + '.png', '?')
         pdb.gimp_image_delete(new_image)
 
