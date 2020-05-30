@@ -1,10 +1,11 @@
 from PIL import Image
 import os
 
-def parse_image(image, end):
+def parse_image(image, end, i, char):
     im = Image.open(image)
     pix = im.load()
     length, height = im.size
+    Stats[FontName[i]][char] = {}
 
     print(str(length) + ", " + str(height))
     minx = 0
@@ -13,6 +14,7 @@ def parse_image(image, end):
     maxy = 1
     nibbles = 0
 
+    # get minx of the image
     for x in range(length):
         for y in range(height):
             rgb = list(pix[x,y])
@@ -23,7 +25,7 @@ def parse_image(image, end):
         else:
             continue
         break
-
+    # get maxx of the image
     for x in range(length-1, -1, -1):
         for y in range(height):
             rgb = list(pix[x,y])
@@ -35,6 +37,7 @@ def parse_image(image, end):
             continue
         break
 
+    # get miny of the image
     for y in range(height):
         for x in range(length):
             rgb = list(pix[x,y])
@@ -45,7 +48,8 @@ def parse_image(image, end):
         else:
             continue
         break
-
+    
+    # get maxy of the image
     for y in range(height-1, -1, -1):
         for x in range(length):
             rgb = list(pix[x,y])
@@ -57,12 +61,19 @@ def parse_image(image, end):
             continue
         break
 
+    # determine odd widths
     oddPos = True
     oddSize = False
     if (maxx - minx) % 2 == 1:
         oddSize = True
 
+    # record the size for the struct
     print(maxx-minx)
+    if oddSize:
+        Stats[FontName[i]][char]["width"] = maxx-minx + 1
+    else:
+        Stats[FontName[i]][char]["width"] = maxx-minx
+    Stats[FontName[i]][char]["height"] = maxy-miny
     endy = False
     for y in range(miny, maxy):
         if y == maxy-1:
@@ -74,7 +85,11 @@ def parse_image(image, end):
                 endx = True
             rgb = list(pix[x,y])
             r = rgb[0]
-            r = int((255-r)/17)
+            # invert scale
+            if FontInv[i] == 'y':
+                r = int(r/17)
+            else:
+                r = int((255-r)/17)
             if oddPos:
                 f.write("0x" + '{:01X}'.format(r))
                 nibbles += 1
@@ -114,6 +129,7 @@ f.write("#include \"globals.h\"\n\n")
 FontNum = int(input("How many different font sets do you want: "))
 FontName = []
 FontPath = []
+FontInv = []
 Padding = {}
 Stats = {}
 tab = "    "
@@ -121,6 +137,7 @@ tab = "    "
 for i in range(FontNum):
     FontName.append(input("Name for font " + str(i) + ": "))
     FontPath.append(input("Resource path for font " + str(i) + ": "))
+    FontInv.append(input("Invert scale? (y/n)").lower())
     if input("Do you want to add padding to any character in the set? (y/n) ").lower() == "y":
         done = False
         Padding[FontName[i]] = {}
@@ -150,14 +167,29 @@ for i in range(FontNum):
             end = True
 
         filename = os.fsdecode(file)
-        char = filename.replace(".png", "")
+        if filename[-4:] == ".png" or filename[-4:] == ".jpg":
+            char = filename.replace(".png", "")
 
-        if (dicName[-1] != "/"):
-            image = dicName + "/" + filename
-        else:
-            image = dicName + filename
+            if (dicName[-1] != "/"):
+                image = dicName + "/" + filename
+            else:
+                image = dicName + filename
 
-        f.write("\n" + tab + "// 4bit grey scale for char " + char + "\n" + tab)
-        parse_image(image, end)
+            f.write("\n" + tab + "// 4bit grey scale for char " + char + "\n" + tab)
+            parse_image(image, end, i, char)
 
+for i in range(FontNum):
+    byteTotal = 0
+    f.write("\nenhancedFontStruct " + FontName[i] + "Struct[] =\n{")
+    for k in Stats[FontName[i]]:
+        width = Stats[FontName[i]][k]["width"]
+        height = Stats[FontName[i]][k]["height"]
+        f.write("\n    {'" + k + "', &" + FontName[i] + "[" + str(int(byteTotal)) + "], ")
+        f.write(str(height))
+        f.write(", ")
+        f.write(str(width))
+        f.write(", 0},")
+        byteTotal += (width*height)/2
 
+    f.write("\n    {0, NULL, 0, 0, 0}                    // Terminator\n};\n\n")
+            
